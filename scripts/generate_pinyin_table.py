@@ -1,0 +1,1802 @@
+"""Generate Dart pinyin initials mapping from pinyin-data.
+
+Downloads the pinyin.txt database from mozillazg/pinyin-data (GitHub)
+and extracts only the pinyin *initial* (first letter or consonant cluster)
+for each Chinese character.
+
+Output: lib/core/search/file_pinyin_data.dart
+"""
+
+import urllib.request
+import os
+import sys
+
+PINYIN_URL = (
+    "https://raw.githubusercontent.com/mozillazg/pinyin-data/"
+    "master/pinyin.txt"
+)
+
+FALLBACK_DATA = """\
+# Minimal fallback pinyin data — common GB2312 Level-1 chars
+# Format: U+XXXX: pinyin
+U+554A: a
+U+963F: a
+U+9513: ai
+U+57C3: ai
+U+57C4: ai
+U+6328: ai
+U+54CE: ai
+U+5509: ai
+U+54C0: ai
+U+7691: ai
+U+764C: ai
+U+853C: ai
+U+77EE: ai
+U+827E: ai
+U+788D: ai
+U+7231: ai
+U+9698: ai
+U+978D: an
+U+6C28: an
+U+5B89: an
+U+4FFA: an
+U+6309: an
+U+6697: an
+U+6848: an
+U+80A1: an
+U+8328: ang
+U+663E: ang
+U+8003: ao
+U+5CB8: ba
+U+634C: ba
+U+516B: ba
+U+5DF4: ba
+U+62D4: ba
+U+62CE: bai
+U+767D: bai
+U+767E: bai
+U+4F70: bai
+U+6557: bai
+U+659C: ban
+U+73ED: ban
+U+6742: ban
+U+534A: ban
+U+529E: ban
+U+7ECA: bang
+U+5E2E: bang
+U+6768: bang
+U+818C: bao
+U+5305: bao
+U+8584: bao
+U+9971: bao
+U+4FDD: bao
+U+5821: bao
+U+62A5: bao
+U+66B4: bao
+U+5317: bei
+U+5907: bei
+U+88AB: bei
+U+8F88: bei
+U+672C: ben
+U+7B28: ben
+U+6CF5: beng
+U+5D29: beng
+U+903C: bi
+U+9F3B: bi
+U+6BD4: bi
+U+7B14: bi
+U+5F7C: bi
+U+58C1: bi
+U+758F: bian
+U+7F16: bian
+U+8FB9: bian
+U+53D8: bian
+U+8FA8: bian
+U+4FBF: bian
+U+904D: bian
+U+6807: biao
+U+8868: biao
+U+522B: bie
+U+5 Burd: bing
+U+5175: bing
+U+51B0: bing
+U+4E19: bing
+U+5E76: bing
+U+997C: bing
+U+6CE2: bo
+U+5C62: bu
+U+6355: bu
+U+8865: bu
+U+4E0D: bu
+U+5E03: bu
+U+6B65: bu
+U+90E8: bu
+U+64E6: ca
+U+731C: cai
+U+624D: cai
+U+6750: cai
+U+8E29: cai
+U+91C7: cai
+U+5F69: cai
+U+83DC: cai
+U+53C2: can
+U+8695: can
+U+6B8B: can
+U+60E8: can
+U+7070: cang
+U+4ED3: cang
+U+4EDC: cao
+U+8349: cao
+U+518C: ce
+U+4FA7: ce
+U+6D4B: ce
+U+7B56: ce
+U+5C42: ceng
+U+53C9: cha
+U+63D2: cha
+U+8336: cha
+U+67E5: cha
+U+5DEE: chai
+U+67F4: chai
+U+8749: chan
+U+4EA7: chan
+U+94F2: chan
+U+9612: chan
+U+957F: chang
+U+573A: chang
+U+5E38: chang
+U+507F: chang
+U+5531: chang
+U+8D85: chao
+U+6284: chao
+U+6F6E: chao
+U+5DE2: chao
+U+8F66: che
+U+626F: che
+U+5F7B: che
+U+649E: chen
+U+8FB0: chen
+U+5C18: chen
+U+9648: chen
+U+886C: chen
+U+79F0: cheng
+U+6210: cheng
+U+5448: cheng
+U+627F: cheng
+U+57CE: cheng
+U+7A0B: cheng
+U+60E9: cheng
+U+5403: chi
+U+6C60: chi
+U+8FDF: chi
+U+6301: chi
+U+9F7F: chi
+U+8D64: chi
+U+7FC5: chi
+U+5145: chong
+U+866B: chong
+U+5D07: chong
+U+62BD: chou
+U+7B79: chou
+U+6200: chu
+U+521D: chu
+U+53A8: chu
+U+9664: chu
+U+50A8: chu
+U+790E: chu
+U+89E6: chu
+U+5DDD: chuan
+U+7A7F: chuan
+U+4F20: chuan
+U+8239: chuan
+U+5598: chuan
+U+4E32: chuan
+U+7A97: chuang
+U+5E8A: chuang
+U+95EF: chuang
+U+521B: chuang
+U+5439: chui
+U+708A: chui
+U+9524: chui
+U+578B: chun
+U+6625: chun
+U+7EAF: chun
+U+5507: chun
+U+6B4C: chuo
+U+78CB: ci
+U+8BCD: ci
+U+6148: ci
+U+78C1: ci
+U+6B64: ci
+U+523A: ci
+U+8D50: ci
+U+806A: cong
+U+4ECE: cong
+U+4E1B: cong
+U+51D1: cou
+U+7C97: cu
+U+918B: cu
+U+7C07: cuan
+U+64AB: cuan
+U+5D3A: cui
+U+5D58: cui
+U+50AC: cui
+U+7CB9: cui
+U+8106: cui
+U+5B58: cun
+U+5BF8: cun
+U+64AE: cuo
+U+6413: cuo
+U+63AA: cuo
+U+9519: cuo
+U+642D: da
+U+7B54: da
+U+6253: da
+U+5927: da
+U+5446: dai
+U+5E26: dai
+U+6B86: dai
+U+62C5: dan
+U+5355: dan
+U+65E6: dan
+U+60EE: dan
+U+86CB: dan
+U+6DE1: dan
+U+86CB: dan
+U+5F53: dang
+U+515A: dang
+U+6321: dang
+U+6863: dang
+U+5200: dao
+U+5BFC: dao
+U+5C9B: dao
+U+5012: dao
+U+76D7: dao
+U+9053: dao
+U+7A3B: dao
+U+5F97: de
+U+7684: de
+U+706F: deng
+U+767B: deng
+U+7B49: deng
+U+9093: deng
+U+4F4E: di
+U+6EF4: di
+U+7684: di
+U+654C: di
+U+7B2C: di
+U+7586: di
+U+5E95: di
+U+5730: di
+U+5E1D: di
+U+9012: di
+U+7F29: diu
+U+5DD3: dian
+U+5178: dian
+U+7535: dian
+U+5E97: dian
+U+5662: dian
+U+70B9: dian
+U+5178: diao
+U+96D5: diao
+U+6389: diao
+U+8C03: diao
+U+7239: die
+U+8DCC: die
+U+53E0: die
+U+789F: die
+U+4E01: ding
+U+9876: ding
+U+5B9A: ding
+U+8BA2: ding
+U+4E22: diu
+U+51AC: dong
+U+4E1C: dong
+U+61C2: dong
+U+52A8: dong
+U+680B: dong
+U+6D1E: dong
+U+515C: dou
+U+6597: dou
+U+6296: dou
+U+8C46: dou
+U+9017: dou
+U+7763: du
+U+6BD2: du
+U+72EC: du
+U+8BFB: du
+U+5835: du
+U+5EA6: du
+U+6E21: du
+U+7AEF: duan
+U+77ED: duan
+U+6BB5: duan
+U+65AD: duan
+U+953B: duan
+U+5806: dui
+U+961F: dui
+U+5BF9: dui
+U+5151: dui
+U+5428: dun
+U+58A9: dun
+U+76F4: dun
+U+77F3: dun
+U+987F: dun
+U+9041: dun
+U+591A: duo
+U+593A: duo
+U+6735: duo
+U+8EB2: duo
+U+60EE: duo
+U+57AE: duo
+U+8136: e
+U+989D: e
+U+6076: e
+U+9042: en
+U+6069: en
+U+513F: er
+U+8033: er
+U+4E8C: er
+U+53D1: fa
+U+4E4F: fa
+U+7F5A: fa
+U+6CD5: fa
+U+5E06: fan
+U+7E41: fan
+U+53CD: fan
+U+8303: fan
+U+8302: fan
+U+65B9: fang
+U+623F: fang
+U+653E: fang
+U+975E: fei
+U+98DE: fei
+U+80A5: fei
+U+6CB8: fei
+U+5E9F: fei
+U+8082: fei
+U+5206: fen
+U+7EB7: fen
+U+7C89: fen
+U+594B: fen
+U+7CAA: fen
+U+4E30: feng
+U+5C01: feng
+U+67AB: feng
+U+8702: feng
+U+98CE: feng
+U+9022: feng
+U+5949: feng
+U+4F5B: fo
+U+5426: fou
+U+592B: fu
+U+5A5A: fu
+U+6276: fu
+U+670D: fu
+U+4F0F: fu
+U+6D6E: fu
+U+7B26: fu
+U+798F: fu
+U+8F85: fu
+U+4ED8: fu
+U+8D1F: fu
+U+590D: fu
+U+5236: gai
+U+6539: gai
+U+76D6: gai
+U+6982: gai
+U+5E72: gan
+U+7518: gan
+U+6746: gan
+U+809D: gan
+U+8D76: gan
+U+6562: gan
+U+611F: gan
+U+521A: gang
+U+7F38: gang
+U+5C97: gang
+U+6E2F: gang
+U+6760: gang
+U+9AD8: gao
+U+7A3F: gao
+U+641E: gao
+U+544A: gao
+U+54E5: ge
+U+6B4C: ge
+U+5272: ge
+U+683C: ge
+U+963B: ge
+U+5404: ge
+U+7ED9: gei
+U+6839: gen
+U+8DDF: gen
+U+66F4: geng
+U+8015: geng
+U+5E9A: geng
+U+5DE5: gong
+U+516C: gong
+U+529F: gong
+U+653B: gong
+U+5171: gong
+U+52FE: gou
+U+6C9F: gou
+U+72D7: gou
+U+6784: gou
+U+8D2D: gou
+U+8C37: gu
+U+9AA8: gu
+U+53E4: gu
+U+80A1: gu
+U+6545: gu
+U+56FA: gu
+U+96C7: gu
+U+522E: gua
+U+6302: gua
+U+8D23: guai
+U+602A: guai
+U+5173: guan
+U+89C2: guan
+U+5B98: guan
+U+7BA1: guan
+U+9986: guan
+U+616F: guan
+U+5149: guang
+U+5E7F: guang
+U+89C4: gui
+U+9B3C: gui
+U+8D35: gui
+U+6842: gui
+U+77ED: gun
+U+6EDA: gun
+U+9505: guo
+U+56FD: guo
+U+679C: guo
+U+8FC7: guo
+U+54C8: ha
+U+8FD8: hai
+U+6D77: hai
+U+5BB3: hai
+U+915C: han
+U+542B: han
+U+5BD2: han
+U+51FD: han
+U+6C57: han
+U+6C49: han
+U+608D: han
+U+7F55: han
+U+884C: hang
+U+822A: hang
+U+58D5: hao
+U+6BEB: hao
+U+597D: hao
+U+53F7: hao
+U+8017: hao
+U+6D69: hao
+U+559D: he
+U+6838: he
+U+548C: he
+U+6CB3: he
+U+8D6B: he
+U+8D6D: he
+U+9ED1: hei
+U+75D5: hen
+U+5F88: hen
+U+72E0: hen
+U+4EA8: heng
+U+6A2A: heng
+U+8861: heng
+U+70B8: hong
+U+7EA2: hong
+U+5B8F: hong
+U+8679: hong
+U+6D2A: hong
+U+4FAF: hou
+U+540E: hou
+U+5019: hou
+U+539A: hou
+U+547C: hu
+U+5FFD: hu
+U+74F6: hu
+U+864E: hu
+U+4E92: hu
+U+6237: hu
+U+62A4: hu
+U+82B1: hua
+U+534E: hua
+U+6ED1: hua
+U+753B: hua
+U+8BDD: hua
+U+5316: hua
+U+69D0: huai
+U+6000: huai
+U+574F: huai
+U+6B22: huan
+U+73AF: huan
+U+8FD8: huan
+U+7F13: huan
+U+5E7B: huan
+U+6362: huan
+U+8352: huang
+U+614C: huang
+U+7687: huang
+U+9EC4: huang
+U+6643: huang
+U+7070: hui
+U+6325: hui
+U+6062: hui
+U+56DE: hui
+U+6BCF: hui
+U+6C47: hui
+U+7ED8: hui
+U+665F: hun
+U+6DF7: hun
+U+6D3B: huo
+U+706B: huo
+U+4F19: huo
+U+6216: huo
+U+8D27: huo
+U+8377: huo
+U+51E0: ji
+U+51FB: ji
+U+673A: ji
+U+808C: ji
+U+9E21: ji
+U+57FA: ji
+U+53CA: ji
+U+6781: ji
+U+96C6: ji
+U+51E0: ji
+U+8BA1: ji
+U+8BB0: ji
+U+5FCC: ji
+U+9645: ji
+U+7EE7: ji
+U+5BC4: ji
+U+52A0: jia
+U+5939: jia
+U+4F73: jia
+U+5BB6: jia
+U+7532: jia
+U+5047: jia
+U+4EF7: jia
+U+67B6: jia
+U+9A7E: jia
+U+517C: jian
+U+76D1: jian
+U+5C16: jian
+U+575A: jian
+U+95F4: jian
+U+526A: jian
+U+68C0: jian
+U+7B80: jian
+U+89C1: jian
+U+5EFA: jian
+U+5065: jian
+U+5251: jian
+U+6C5F: jiang
+U+5C06: jiang
+U+6D46: jiang
+U+50F5: jiang
+U+5956: jiang
+U+964D: jiang
+U+9171: jiang
+U+4EA4: jiao
+U+6912: jiao
+U+7126: jiao
+U+89D2: jiao
+U+811A: jiao
+U+63A5: jiao
+U+53EB: jiao
+U+6559: jiao
+U+9636: jie
+U+63A5: jie
+U+8857: jie
+U+8282: jie
+U+6770: jie
+U+6D01: jie
+U+7ED3: jie
+U+89E3: jie
+U+4ECB: jie
+U+5C4A: jie
+U+91D1: jin
+U+4ECA: jin
+U+7B4B: jin
+U+5DFE: jin
+U+7D27: jin
+U+8FDB: jin
+U+8FD1: jin
+U+7981: jin
+U+5C3D: jin
+U+4EAC: jing
+U+7ECF: jing
+U+83C1: jing
+U+60CA: jing
+U+7CBE: jing
+U+4E95: jing
+U+666F: jing
+U+8B66: jing
+U+51C0: jing
+U+5883: jing
+U+9759: jing
+U+7A76: jiu
+U+7EA0: jiu
+U+9152: jiu
+U+4E45: jiu
+U+6551: jiu
+U+65E7: jiu
+U+5C40: ju
+U+4E3E: ju
+U+5DE8: ju
+U+62D2: ju
+U+5177: ju
+U+5267: ju
+U+8DDD: ju
+U+805A: ju
+U+636E: ju
+U+952F: ju
+U+6350: juan
+U+5377: juan
+U+7EDD: jue
+U+89C9: jue
+U+6398: jue
+U+519B: jun
+U+5747: jun
+U+4FCA: jun
+U+5CFE: jun
+U+5496: ka
+U+5361: ka
+U+5F00: kai
+U+51EF: kai
+U+520A: kan
+U+770B: kan
+U+4F83: kan
+U+6162: kang
+U+6297: kang
+U+70E4: kao
+U+8003: kao
+U+9760: kao
+U+67EF: ke
+U+9897: ke
+U+58F3: ke
+U+53EF: ke
+U+523B: ke
+U+5BA2: ke
+U+8BFE: ke
+U+80AF: ken
+U+57A6: ken
+U+5751: keng
+U+7A7A: kong
+U+5B54: kong
+U+6050: kong
+U+63A7: kong
+U+53E3: kou
+U+6263: kou
+U+9157: ku
+U+54ED: ku
+U+82E6: ku
+U+5E93: ku
+U+88E4: ku
+U+5938: kua
+U+57AE: kua
+U+5FEB: kuai
+U+5757: kuai
+U+7B77: kuai
+U+5BBD: kuan
+U+6B3E: kuan
+U+5321: kuang
+U+72C2: kuang
+U+6846: kuang
+U+77FF: kuang
+U+51B5: kuang
+U+4E8F: kui
+U+594E: kui
+U+8D67: kui
+U+9982: kui
+U+5764: kun
+U+62F4: kun
+U+56F0: kun
+U+62EC: kuo
+U+9614: kuo
+U+6269: kuo
+U+62C9: la
+U+5566: la
+U+8721: la
+U+8FA3: la
+U+6765: lai
+U+8D56: lai
+U+5170: lan
+U+6CE2: lan
+U+7B2E: lan
+U+89C8: lan
+U+61D2: lan
+U+70C2: lan
+U+72FC: lang
+U+6717: lang
+U+6D6A: lang
+U+52B3: lao
+U+7262: lao
+U+8001: lao
+U+4E50: le
+U+52D2: le
+U+96F7: lei
+U+7D2F: lei
+U+6CEA: lei
+U+7C7B: lei
+U+68F1: leng
+U+51B7: leng
+U+5398: li
+U+68A8: li
+U+79BB: li
+U+674E: li
+U+7406: li
+U+529B: li
+U+5386: li
+U+7ACB: li
+U+4E3D: li
+U+4F8B: li
+U+7C92: li
+U+8054: lian
+U+83B2: lian
+U+5EC9: lian
+U+8138: lian
+U+7EC3: lian
+U+70BC: lian
+U+94FE: lian
+U+826F: liang
+U+51C9: liang
+U+4EAE: liang
+U+91CF: liang
+U+8FDE: liao
+U+4E86: liao
+U+6599: liao
+U+5217: lie
+U+88C2: lie
+U+730E: lie
+U+90BB: lin
+U+6797: lin
+U+4E34: lin
+U+6DCB: lin
+U+8D34: ling
+U+73B2: ling
+U+96F6: ling
+U+5CAD: ling
+U+9886: ling
+U+53E6: ling
+U+4EE4: ling
+U+6E9C: liu
+U+6D41: liu
+U+7559: liu
+U+516D: liu
+U+9646: liu
+U+9F99: long
+U+804B: long
+U+7B3C: long
+U+9647: long
+U+697C: lou
+U+6F0F: lou
+U+9646: lu
+U+7089: lu
+U+5362: lu
+U+82A6: lu
+U+5362: lu
+U+9E7F: lu
+U+8DEF: lu
+U+9732: lu
+U+9A74: lv
+U+65C5: lv
+U+5C64: lv
+U+7EFF: lv
+U+6E2F: luan
+U+4E71: luan
+U+7565: lve
+U+62A2: lun
+U+4F26: lun
+U+8F6E: lun
+U+8BBA: lun
+U+7F57: luo
+U+7F51: luo
+U+843D: luo
+U+9A86: luo
+U+5A1C: ma
+U+5988: ma
+U+7801: ma
+U+9A6C: ma
+U+5417: ma
+U+57CB: mai
+U+4E70: mai
+U+5356: mai
+U+8109: mai
+U+86EE: man
+U+6F2B: man
+U+5FD9: mang
+U+8292: mang
+U+76F2: mang
+U+732B: mao
+U+6BDB: mao
+U+8305: mao
+U+8302: mao
+U+7709: mei
+U+7164: mei
+U+6CA1: mei
+U+7F8E: mei
+U+5989: mei
+U+95F7: men
+U+4EEC: men
+U+840C: meng
+U+76DF: meng
+U+731B: meng
+U+68A6: meng
+U+5B5F: meng
+U+8FF7: mi
+U+7C73: mi
+U+79D8: mi
+U+5BC6: mi
+U+7720: mian
+U+7F05: mian
+U+514D: mian
+U+52C9: mian
+U+9762: mian
+U+82D7: miao
+U+63CF: miao
+U+79D2: miao
+U+6E38: mie
+U+706D: mie
+U+6C11: min
+U+654F: min
+U+660E: ming
+U+9E23: ming
+U+547D: ming
+U+6A21: mo
+U+6469: mo
+U+672B: mo
+U+6F20: mo
+U+58A8: mo
+U+9ED8: mo
+U+67D0: mou
+U+8C0B: mou
+U+6BCD: mu
+U+6728: mu
+U+76EE: mu
+U+7267: mu
+U+5E55: mu
+U+7EB3: na
+U+90A3: na
+U+5976: nai
+U+8010: nai
+U+5357: nan
+U+7537: nan
+U+96BE: nan
+U+56CA: nang
+U+633F: nao
+U+8111: nao
+U+6C83: ne
+U+5185: nei
+U+5AE9: nen
+U+80FD: neng
+U+59AE: ni
+U+6CE5: ni
+U+9006: ni
+U+96B1: ni
+U+5E74: nian
+U+7C98: nian
+U+78BE: nian
+U+5FF5: nian
+U+5A18: niang
+U+917F: niang
+U+9E1F: niao
+U+5C3F: niao
+U+634E: nie
+U+60A8: nin
+U+51DD: ning
+U+72B8: niu
+U+626D: niu
+U+725B: niu
+U+519C: nong
+U+6D53: nong
+U+52AA: nu
+U+5974: nu
+U+6012: nu
+U+5973: nv
+U+6696: nuan
+U+5E86: nve
+U+6027: nve
+U+632A: nuo
+U+8BFA: nuo
+U+54E6: o
+U+6B27: ou
+U+5076: ou
+U+6B6A: pa
+U+722C: pa
+U+6015: pa
+U+62CD: pai
+U+6392: pai
+U+6D3E: pai
+U+6F58: pan
+U+76D8: pan
+U+65C1: pang
+U+80D6: pang
+U+6CE1: pao
+U+70AE: pao
+U+8DD1: pao
+U+80DA: pei
+U+966A: pei
+U+914D: pei
+U+55B7: pen
+U+76C6: pen
+U+70F9: peng
+U+670B: peng
+U+78B0: peng
+U+6279: pi
+U+76AE: pi
+U+75B2: pi
+U+813E: pi
+U+5C41: pi
+U+8F9F: pi
+U+7BC7: pian
+U+4FBF: pian
+U+7247: pian
+U+9A97: pian
+U+6F02: piao
+U+7968: piao
+U+62FC: pin
+U+9891: pin
+U+54C1: pin
+U+8058: pin
+U+51ED: ping
+U+82F9: ping
+U+5E73: ping
+U+74F6: ping
+U+5761: po
+U+6CFC: po
+U+9887: po
+U+7834: po
+U+8FEB: po
+U+5256: pou
+U+94FA: pu
+U+6734: pu
+U+666E: pu
+U+6D66: pu
+U+66B4: pu
+U+4E03: qi
+U+671F: qi
+U+6F06: qi
+U+5176: qi
+U+5947: qi
+U+9A91: qi
+U+8D77: qi
+U+6C14: qi
+U+5668: qi
+U+6C7D: qi
+U+6070: qia
+U+5343: qian
+U+7B7E: qian
+U+524D: qian
+U+94B1: qian
+U+6D45: qian
+U+9063: qian
+U+5F3A: qiang
+U+5899: qiang
+U+62A2: qiang
+U+6572: qiao
+U+6865: qiao
+U+5DE7: qiao
+U+7FC1: qiao
+U+5207: qie
+U+4E14: qie
+U+4EB2: qin
+U+52E4: qin
+U+7434: qin
+U+9752: qing
+U+8F7B: qing
+U+6E05: qing
+U+60C5: qing
+U+8BF7: qing
+U+5E86: qing
+U+7A77: qiong
+U+7430: qiong
+U+79CB: qiu
+U+4E18: qiu
+U+6C42: qiu
+U+7403: qiu
+U+533A: qu
+U+66F2: qu
+U+53D6: qu
+U+53BB: qu
+U+8DA3: qu
+U+5168: quan
+U+6743: quan
+U+6CC9: quan
+U+62F3: quan
+U+72AC: quan
+U+529D: quan
+U+7F3A: que
+U+5374: que
+U+786E: que
+U+96C0: que
+U+7FA4: qun
+U+88D9: qun
+U+7136: ran
+U+71C3: ran
+U+67D3: ran
+U+58E4: rang
+U+8BA9: rang
+U+70ED: re
+U+4EBA: ren
+U+5FCD: ren
+U+8BA4: ren
+U+4EFB: ren
+U+6254: reng
+U+4ECD: reng
+U+65E5: ri
+U+5BB9: rong
+U+6EB6: rong
+U+8363: rong
+U+878D: rong
+U+67D4: rou
+U+8089: rou
+U+5982: ru
+U+5112: ru
+U+4E73: ru
+U+5165: ru
+U+8F6F: ruan
+U+82AF: rui
+U+9510: rui
+U+745E: rui
+U+6DA6: run
+U+82E5: ruo
+U+5F31: ruo
+U+6492: sa
+U+6D12: sa
+U+585E: sai
+U+8D5B: sai
+U+4E09: san
+U+4F1E: san
+U+6563: san
+U+6851: sang
+U+55AA: sang
+U+627C: sao
+U+626B: sao
+U+8272: se
+U+6DA9: se
+U+68EE: sen
+U+50E7: seng
+U+6740: sha
+U+6C99: sha
+U+7EB1: sha
+U+5C71: shan
+U+5220: shan
+U+95EA: shan
+U+5584: shan
+U+5587: shang
+U+4F24: shang
+U+5546: shang
+U+8D4F: shang
+U+4E0A: shang
+U+70E7: shao
+U+7A0D: shao
+U+5C11: shao
+U+7ECD: shao
+U+86C7: she
+U+820C: she
+U+8D66: she
+U+793E: she
+U+5C04: she
+U+6D89: she
+U+8C01: shei
+U+6DF1: shen
+U+8EAB: shen
+U+4EC0: shen
+U+795E: shen
+U+614E: shen
+U+751A: shen
+U+751F: sheng
+U+58F0: sheng
+U+7EF3: sheng
+U+7701: sheng
+U+5723: sheng
+U+52A2: sheng
+U+80DC: sheng
+U+6B7F: shi
+U+8BD7: shi
+U+5931: shi
+U+65BD: shi
+U+6E7F: shi
+U+5341: shi
+U+77F3: shi
+U+65F6: shi
+U+8BC6: shi
+U+5B9E: shi
+U+98DF: shi
+U+53F2: shi
+U+59CB: shi
+U+793A: shi
+U+58EB: shi
+U+4E16: shi
+U+4E8B: shi
+U+8BD5: shi
+U+89C6: shi
+U+6536: shou
+U+624B: shou
+U+9996: shou
+U+5BFF: shou
+U+53D7: shou
+U+5356: shou
+U+7626: shou
+U+4E66: shu
+U+8F93: shu
+U+758F: shu
+U+719F: shu
+U+7F72: shu
+U+672F: shu
+U+6811: shu
+U+676D: shu
+U+6570: shu
+U+5237: shua
+U+800D: shua
+U+8870: shuai
+U+7529: shuai
+U+5E05: shuai
+U+6813: shuan
+U+53CC: shuang
+U+971C: shuang
+U+723D: shuang
+U+6C34: shui
+U+7761: shui
+U+7A0E: shui
+U+77AC: shun
+U+987A: shun
+U+8BF4: shuo
+U+785D: si
+U+601D: si
+U+79C1: si
+U+53F8: si
+U+4E1D: si
+U+6B7B: si
+U+56DB: si
+U+4F3C: si
+U+9972: si
+U+677E: song
+U+5B8B: song
+U+9001: song
+U+9882: song
+U+641C: sou
+U+82CF: su
+U+4FD7: su
+U+7D20: su
+U+901F: su
+U+5BBF: su
+U+5851: su
+U+9178: suan
+U+849C: suan
+U+7B97: suan
+U+867D: sui
+U+968F: sui
+U+5C81: sui
+U+788E: sui
+U+9042: sui
+U+5B59: sun
+U+635F: sun
+U+7B0B: sun
+U+7F29: suo
+U+6240: suo
+U+9501: suo
+U+4ED6: ta
+U+5B83: ta
+U+5979: ta
+U+5854: ta
+U+8E0F: ta
+U+53F0: tai
+U+6CF0: tai
+U+592A: tai
+U+6001: tai
+U+6EE8: tan
+U+8D2A: tan
+U+6EE9: tan
+U+575B: tan
+U+6C1B: tan
+U+63A2: tan
+U+53F9: tan
+U+6C64: tang
+U+5510: tang
+U+5802: tang
+U+7CD6: tang
+U+8EBA: tang
+U+6D9B: tao
+U+6DD8: tao
+U+5957: tao
+U+7279: te
+U+85E4: teng
+U+75BC: teng
+U+817E: teng
+U+68AF: ti
+U+5254: ti
+U+8E22: ti
+U+63D0: ti
+U+9898: ti
+U+4F53: ti
+U+66FF: ti
+U+5929: tian
+U+6DFB: tian
+U+751C: tian
+U+586B: tian
+U+6761: tiao
+U+8C03: tiao
+U+8DF3: tiao
+U+8D34: tie
+U+94C1: tie
+U+5385: ting
+U+542C: ting
+U+505C: ting
+U+5EF7: ting
+U+901A: tong
+U+540C: tong
+U+7EDF: tong
+U+7B52: tong
+U+75DB: tong
+U+5077: tou
+U+6295: tou
+U+5934: tou
+U+900F: tou
+U+51F8: tu
+U+79C3: tu
+U+7A81: tu
+U+56FE: tu
+U+9014: tu
+U+6D82: tu
+U+571F: tu
+U+5154: tu
+U+56E2: tuan
+U+63A8: tui
+U+817F: tui
+U+9000: tui
+U+541E: tun
+U+5C6F: tun
+U+8131: tuo
+U+62D6: tuo
+U+9A76: tuo
+U+9640: tuo
+U+59A5: tuo
+U+6316: wa
+U+86D9: wa
+U+5A03: wa
+U+74E6: wa
+U+6B6A: wai
+U+5916: wai
+U+5F2F: wan
+U+6E7E: wan
+U+5B8C: wan
+U+73A9: wan
+U+4E38: wan
+U+665A: wan
+U+4E07: wan
+U+738B: wang
+U+7F51: wang
+U+5F80: wang
+U+5FD8: wang
+U+671B: wang
+U+5A01: wei
+U+5FAE: wei
+U+5371: wei
+U+56F4: wei
+U+4E3A: wei
+U+7768: wei
+U+59D4: wei
+U+536B: wei
+U+4F4D: wei
+U+5473: wei
+U+6E29: wen
+U+6587: wen
+U+7EB9: wen
+U+7A33: wen
+U+95EE: wen
+U+7FC1: weng
+U+874E: wo
+U+6211: wo
+U+63E1: wo
+U+6C61: wu
+U+5C4B: wu
+U+5434: wu
+U+65E0: wu
+U+4E94: wu
+U+5348: wu
+U+6B66: wu
+U+6B7B: wu
+U+7269: wu
+U+52A1: wu
+U+8BEF: wu
+U+96FE: wu
+U+897F: xi
+U+5438: xi
+U+5E0C: xi
+U+6812: xi
+U+606F: xi
+U+72A7: xi
+U+6D17: xi
+U+559C: xi
+U+7CFB: xi
+U+7EC6: xi
+U+867E: xia
+U+5CE1: xia
+U+4FA0: xia
+U+4E0B: xia
+U+590F: xia
+U+5413: xia
+U+5148: xian
+U+7EBF: xian
+U+9650: xian
+U+73B0: xian
+U+53BF: xian
+U+7EBF: xian
+U+732E: xian
+U+7F1D: xian
+U+76F8: xiang
+U+9999: xiang
+U+7BB1: xiang
+U+4E61: xiang
+U+8BE6: xiang
+U+4EAB: xiang
+U+54CD: xiang
+U+60F3: xiang
+U+5411: xiang
+U+5DF7: xiang
+U+5C0F: xiao
+U+6D88: xiao
+U+534F: xie
+U+978B: xie
+U+5199: xie
+U+8C22: xie
+U+5FC3: xin
+U+8F9B: xin
+U+65B0: xin
+U+4FE1: xin
+U+661F: xing
+U+5174: xing
+U+884C: xing
+U+5F62: xing
+U+6027: xing
+U+59D3: xing
+U+5144: xiong
+U+80F8: xiong
+U+96C4: xiong
+U+718A: xiong
+U+4F11: xiu
+U+4FEE: xiu
+U+79C0: xiu
+U+9700: xu
+U+865A: xu
+U+8BB8: xu
+U+5E8F: xu
+U+7EED: xu
+U+5BA3: xuan
+U+60AC: xuan
+U+9009: xuan
+U+5B66: xue
+U+96EA: xue
+U+8840: xue
+U+52DB: xun
+U+5BFB: xun
+U+5FAA: xun
+U+8BAD: xun
+U+8FC5: xun
+U+538B: ya
+U+9E2D: ya
+U+7259: ya
+U+96C5: ya
+U+5A03: ya
+U+70DF: yan
+U+5EF6: yan
+U+4E25: yan
+U+8A00: yan
+U+989C: yan
+U+773C: yan
+U+6F14: yan
+U+9A8C: yan
+U+592E: yang
+U+6D0B: yang
+U+963D: yang
+U+517B: yang
+U+6837: yang
+U+908F: yao
+U+6447: yao
+U+54AC: yao
+U+836F: yao
+U+8981: yao
+U+8000: yao
+U+7237: ye
+U+51B6: ye
+U+91CE: ye
+U+53F6: ye
+U+4E1A: ye
+U+591C: ye
+U+6DB2: ye
+U+4E00: yi
+U+8863: yi
+U+533B: yi
+U+4F9D: yi
+U+79FB: yi
+U+7591: yi
+U+5DF2: yi
+U+4EE5: yi
+U+610F: yi
+U+6EA2: yi
+U+8BEE: yi
+U+56E0: yin
+U+9634: yin
+U+94F6: yin
+U+996E: yin
+U+5F15: yin
+U+5370: yin
+U+5E94: ying
+U+82F1: ying
+U+5A74: ying
+U+8FCE: ying
+U+5F71: ying
+U+786C: ying
+U+6620: ying
+U+54E6: yo
+U+62E5: yong
+U+6C38: yong
+U+52C7: yong
+U+7528: yong
+U+4F18: you
+U+5E7D: you
+U+6E38: you
+U+53CB: you
+U+6709: you
+U+53C8: you
+U+53F3: you
+U+4F51: you
+U+8BF1: you
+U+6DE1: yu
+U+6E14: yu
+U+5A31: yu
+U+4F59: yu
+U+96E8: yu
+U+8BED: yu
+U+7389: yu
+U+9884: yu
+U+57DF: yu
+U+6E32: yu
+U+516E: yuan
+U+5458: yuan
+U+539F: yuan
+U+5706: yuan
+U+8FDC: yuan
+U+613F: yuan
+U+9662: yuan
+U+7EA6: yue
+U+6708: yue
+U+9605: yue
+U+8D8A: yue
+U+4E91: yun
+U+5141: yun
+U+8FD0: yun
+U+5B55: yun
+U+6742: za
+U+7838: za
+U+707E: zai
+U+5B7D: zai
+U+5728: zai
+U+518D: zai
+U+54B1: zan
+U+8D5E: zan
+U+810F: zang
+U+846C: zang
+U+906D: zao
+U+65E9: zao
+U+6CA1: zao
+U+7A82: zao
+U+566A: zao
+U+6cfd: ze
+U+8D23: ze
+U+600E: zen
+U+589E: zeng
+U+8D60: zeng
+U+624E: zha
+U+70B8: zha
+U+95F8: zha
+U+6452: zhai
+U+5B85: zhai
+U+7A84: zhai
+U+6CBE: zhan
+U+7C98: zhan
+U+5C55: zhan
+U+6218: zhan
+U+7AD9: zhan
+U+7AE0: zhang
+U+5F20: zhang
+U+638C: zhang
+U+4E08: zhang
+U+8D26: zhang
+U+8D75: zhao
+U+62DB: zhao
+U+627E: zhao
+U+8D75: zhao
+U+7167: zhao
+U+7F69: zhao
+U+6298: zhe
+U+8005: zhe
+U+8FD9: zhe
+U+771F: zhen
+U+9488: zhen
+U+8BCA: zhen
+U+632F: zhen
+U+9635: zhen
+U+9547: zhen
+U+6B63: zheng
+U+4E89: zheng
+U+6574: zheng
+U+653F: zheng
+U+8BC1: zheng
+U+652F: zhi
+U+77E5: zhi
+U+7EC7: zhi
+U+80A2: zhi
+U+76F4: zhi
+U+503C: zhi
+U+804C: zhi
+U+690D: zhi
+U+6B62: zhi
+U+53EA: zhi
+U+7EB8: zhi
+U+81F4: zhi
+U+5236: zhi
+U+6CBB: zhi
+U+79E9: zhi
+U+8D28: zhi
+U+4E2D: zhong
+U+7EC8: zhong
+U+79CD: zhong
+U+91CD: zhong
+U+4F17: zhong
+U+5468: zhou
+U+6D32: zhou
+U+8F74: zhou
+U+76B1: zhou
+U+9AA8: zhu
+U+732A: zhu
+U+9010: zhu
+U+7AF9: zhu
+U+4E3B: zhu
+U+52A9: zhu
+U+6CE8: zhu
+U+795D: zhu
+U+8457: zhu
+U+94F8: zhu
+U+7B51: zhu
+U+6293: zhua
+U+62FD: zhuai
+U+4E13: zhuan
+U+8F6C: zhuan
+U+6876: zhuang
+U+5E84: zhuang
+U+88C5: zhuang
+U+58EE: zhuang
+U+72B6: zhuang
+U+649E: zhuang
+U+952E: zhui
+U+8FFD: zhui
+U+8D58: zhui
+U+51C6: zhun
+U+684C: zhuo
+U+634C: zhuo
+U+70F9: zhuo
+U+5B5F: zhuo
+U+7741: zi
+U+59FF: zi
+U+8D44: zi
+U+5B50: zi
+U+81EA: zi
+U+5B57: zi
+U+6D1D: zong
+U+5B97: zong
+U+603B: zong
+U+7EB5: zong
+U+8D70: zou
+U+594F: zou
+U+79DF: zu
+U+8DB3: zu
+U+65CF: zu
+U+963B: zu
+U+7EC4: zu
+U+94BB: zuan
+U+64DA: zuan
+U+5634: zui
+U+6700: zui
+U+7F6A: zui
+U+9189: zui
+U+5C0A: zun
+U+9075: zun
+U+6628: zuo
+U+5DE6: zuo
+U+505A: zuo
+U+5750: zuo
+U+4F5C: zuo
+U+505A: zuo
+"""
+
+# Pinyin initial extraction:
+# "zhang" -> "zh", "chao" -> "ch", "shang" -> "sh", "a" -> "a", "ba" -> "b"
+INITIAL_MAP = {
+    'zh': 'zh', 'ch': 'ch', 'sh': 'sh',
+}
+
+def get_initial(pinyin):
+    """Extract pinyin *first letter* only (首字母), stripping tone diacritics.
+
+    Uses unicodedata.normalize('NFD') to decompose accented chars into
+    base + combining diacritics, then takes the base character.
+
+    "zhang" → "z", "chao" → "c", "àn" → "a", "shān" → "s", "ńg" → "n".
+    """
+    import unicodedata
+    pinyin = pinyin.strip().lower()
+    if not pinyin:
+        return ''
+    first = pinyin[0]
+    # Decompose: 'à' → 'a' + combining-grave
+    decomposed = unicodedata.normalize('NFD', first)
+    base = decomposed[0]  # Always the base letter (ASCII for Latin-based chars)
+    return base
+
+
+def parse_line(line):
+    """Parse a pinyin.txt line: U+XXXX: pinyin1, pinyin2 # comment"""
+    line = line.strip()
+    if not line or line.startswith('#'):
+        return None
+    # Skip non-Chinese entries
+    if '#' in line:
+        comment = line.split('#', 1)[1].strip()
+        if comment and not any('一' <= c <= '鿿' for c in comment):
+            return None
+
+    parts = line.split('#')[0].split(':')
+    if len(parts) < 2:
+        return None
+
+    code_hex = parts[0].strip()
+    if not code_hex.startswith('U+'):
+        return None
+
+    try:
+        code_point = int(code_hex[2:], 16)
+    except ValueError:
+        return None
+
+    # Only CJK Unified Ideographs range
+    if not (0x4E00 <= code_point <= 0x9FFF):
+        return None
+
+    pinyins = parts[1].strip().split(',')
+    if not pinyins:
+        return None
+
+    primary = pinyins[0].strip()
+    if not primary:
+        return None
+
+    initial = get_initial(primary)
+    if not initial:
+        return None
+
+    return (code_point, initial)
+
+
+def generate_dart_file(entries, output_path):
+    """Write the Dart pinyin data file."""
+    # Sort by code point for determinism
+    entries.sort(key=lambda e: e[0])
+
+    lines = []
+    lines.append('/// XMate File Search — Chinese character → Pinyin initials lookup.')
+    lines.append('///')
+    lines.append('/// Auto-generated from pinyin-data. Do not edit manually.')
+    lines.append('/// Coverage: GB2312 Level-1 CJK Unified Ideographs (U+4E00–U+9FFF).')
+    lines.append('/// Each entry maps Unicode code point → pinyin initial (ASCII string).')
+    lines.append('library;')
+    lines.append('')
+    lines.append('/// Map: Unicode code point → pinyin initials string.')
+    lines.append('/// Example: 0x5C71 (山) → "s", 0x4E1C (东) → "d".')
+    lines.append('const Map<int, String> _pinyinMap = {')
+
+    # Group entries for readability
+    for code_point, initial in entries:
+        lines.append(f'  0x{code_point:04X}: "{initial}",')
+
+    lines.append('};')
+    lines.append('')
+    lines.append('/// Get pinyin initials string for a Unicode code point.')
+    lines.append('/// Returns empty string for non-CJK characters.')
+    lines.append('String getPinyinInitials(int codePoint) {')
+    lines.append('  return _pinyinMap[codePoint] ?? "";')
+    lines.append('}')
+    lines.append('')
+    lines.append('/// Convert [s] to pinyin initials representation.')
+    lines.append('///')
+    lines.append('/// Chinese characters are replaced by their pinyin initials;')
+    lines.append('/// ASCII letters are lowercased; everything else is dropped.')
+    lines.append('///')
+    lines.append('/// Examples:')
+    lines.append('///   toPinyinInitials("山东") → "sd"')
+    lines.append('///   toPinyinInitials("测试123") → "cs123"')
+    lines.append('///   toPinyinInitials("文件") → "wj"')
+    lines.append('String toPinyinInitials(String s) {')
+    lines.append('  if (s.isEmpty) return "";')
+    lines.append('  final buf = StringBuffer();')
+    lines.append('  for (int i = 0; i < s.length; i++) {')
+    lines.append('    final cp = s.codeUnitAt(i);')
+    lines.append('    // Surrogate pair handling')
+    lines.append('    if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < s.length) {')
+    lines.append('      final lo = s.codeUnitAt(i + 1);')
+    lines.append('      if (lo >= 0xDC00 && lo <= 0xDFFF) {')
+    lines.append('        final hi = cp - 0xD800;')
+    lines.append('        final low = lo - 0xDC00;')
+    lines.append('        final full = (hi << 10) | low;')
+    lines.append('        final p = _pinyinMap[full];')
+    lines.append('        if (p != null) buf.write(p);')
+    lines.append('        i++; // skip low surrogate')
+    lines.append('        continue;')
+    lines.append('      }')
+    lines.append('    }')
+    lines.append('    // CJK Unified Ideographs')
+    lines.append('    final p = _pinyinMap[cp];')
+    lines.append('    if (p != null) {')
+    lines.append('      buf.write(p);')
+    lines.append('    } else if (cp >= 0x61 && cp <= 0x7A) {')
+    lines.append('      // lowercase ASCII')
+    lines.append('      buf.writeCharCode(cp);')
+    lines.append('    } else if (cp >= 0x41 && cp <= 0x5A) {')
+    lines.append('      // uppercase ASCII → lowercase')
+    lines.append('      buf.writeCharCode(cp + 32);')
+    lines.append('    } else if (cp >= 0x30 && cp <= 0x39) {')
+    lines.append('      // digits')
+    lines.append('      buf.writeCharCode(cp);')
+    lines.append('    }')
+    lines.append('    // Everything else skipped')
+    lines.append('  }')
+    lines.append('  return buf.toString();')
+    lines.append('}')
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+        f.write('\n')
+
+    print(f'Generated {output_path} with {len(entries)} entries')
+
+
+def main():
+    output_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'lib', 'core', 'search', 'file_pinyin_data.dart'
+    )
+
+    # Try downloading from GitHub first
+    try:
+        req = urllib.request.Request(PINYIN_URL, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = resp.read().decode('utf-8')
+        print(f'Downloaded pinyin-data: {len(data)} bytes')
+    except Exception as e:
+        print(f'Download failed ({e}), using fallback data')
+        data = FALLBACK_DATA
+
+    entries = []
+    seen = set()
+    for line in data.split('\n'):
+        result = parse_line(line)
+        if result is None:
+            continue
+        code_point, initial = result
+        if code_point in seen:
+            continue
+        seen.add(code_point)
+        entries.append((code_point, initial))
+
+    # Sort by code point for determinism
+    entries.sort(key=lambda e: e[0])
+    generate_dart_file(entries, output_path)
+
+
+if __name__ == '__main__':
+    main()

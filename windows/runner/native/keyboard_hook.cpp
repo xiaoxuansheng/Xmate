@@ -1,0 +1,247 @@
+﻿// Low-level keyboard hook for the XMate notification key-echo process.
+//
+//   WH_KEYBOARD_LL  →  KeyboardLLProc  →  classify  →  SendMessage (...)
+//
+// Lock-key state is predicted via GetKeyState + XOR toggle in the hook
+// callback and packed into the lParam, eliminating one PostMessage queue
+// wait.  IME detection has been removed (V2.8.0).
+
+#include "keyboard_hook.h"
+
+#include <cstring>
+
+namespace {
+
+// ── Internal state ────────────────────────────────────────────────────────
+
+HHOOK  g_hook     = nullptr;   // WH_KEYBOARD_LL handle
+HWND   g_hwnd     = nullptr;   // target window for SendMessage
+
+// ── Fast VK-code lookup table ─────────────────────────────────────────────
+//
+// Indexed by virtual-key code (0-255).  true  = functional key → show.
+// Built once on first use.  The table covers every standard VK with a
+// one-byte-per-entry footprint (256 bytes) so the hot path is a single
+// array dereference.
+
+bool g_funcTable[256] = {};
+bool g_tableBuilt     = false;
+
+void BuildFuncTable() {
+  if (g_tableBuilt) return;
+  std::memset(g_funcTable, 0, sizeof(g_funcTable));
+
+  // F-keys
+  for (int k = VK_F1; k <= VK_F24; ++k) g_funcTable[k] = true;
+
+  g_funcTable[VK_ESCAPE]   = true;
+  g_funcTable[VK_TAB]      = true;
+  g_funcTable[VK_CAPITAL]  = true;   // Caps Lock
+
+  g_funcTable[VK_RETURN]   = true;
+  g_funcTable[VK_BACK]     = true;
+  g_funcTable[VK_DELETE]   = true;
+  g_funcTable[VK_INSERT]   = true;
+
+  g_funcTable[VK_HOME]     = true;
+  g_funcTable[VK_END]      = true;
+  g_funcTable[VK_PRIOR]    = true;   // Page Up
+  g_funcTable[VK_NEXT]     = true;   // Page Down
+
+  g_funcTable[VK_LEFT]     = true;
+  g_funcTable[VK_RIGHT]    = true;
+  g_funcTable[VK_UP]       = true;
+  g_funcTable[VK_DOWN]     = true;
+
+  g_funcTable[VK_SNAPSHOT] = true;   // Print Screen
+  g_funcTable[VK_SCROLL]   = true;   // Scroll Lock
+  g_funcTable[VK_PAUSE]    = true;
+
+  g_funcTable[VK_NUMLOCK]  = true;
+  g_funcTable[VK_DIVIDE]   = true;
+  g_funcTable[VK_MULTIPLY] = true;
+  g_funcTable[VK_SUBTRACT] = true;
+  g_funcTable[VK_ADD]      = true;
+  g_funcTable[VK_DECIMAL]  = true;
+
+  // Numpad 0-9
+  for (int k = VK_NUMPAD0; k <= VK_NUMPAD9; ++k) g_funcTable[k] = true;
+
+  // Media keys
+  g_funcTable[VK_VOLUME_MUTE]       = true;
+  g_funcTable[VK_VOLUME_DOWN]       = true;
+  g_funcTable[VK_VOLUME_UP]         = true;
+  g_funcTable[VK_MEDIA_NEXT_TRACK]  = true;
+  g_funcTable[VK_MEDIA_PREV_TRACK]  = true;
+  g_funcTable[VK_MEDIA_STOP]        = true;
+  g_funcTable[VK_MEDIA_PLAY_PAUSE]  = true;
+
+  // Browser keys
+  g_funcTable[VK_BROWSER_BACK]      = true;
+  g_funcTable[VK_BROWSER_FORWARD]   = true;
+  g_funcTable[VK_BROWSER_REFRESH]   = true;
+  g_funcTable[VK_BROWSER_SEARCH]    = true;
+  g_funcTable[VK_BROWSER_FAVORITES] = true;
+  g_funcTable[VK_BROWSER_HOME]      = true;
+
+  // Launch keys
+  g_funcTable[VK_LAUNCH_MAIL]         = true;
+  g_funcTable[VK_LAUNCH_MEDIA_SELECT] = true;
+  g_funcTable[VK_LAUNCH_APP1]         = true;
+  g_funcTable[VK_LAUNCH_APP2]         = true;
+
+  // Context menu
+  g_funcTable[VK_APPS] = true;
+
+  // IME keys
+  g_funcTable[VK_KANA]       = true;
+  g_funcTable[VK_KANJI]      = true;
+  g_funcTable[VK_CONVERT]    = true;
+  g_funcTable[VK_NONCONVERT] = true;
+  g_funcTable[VK_MODECHANGE] = true;
+  g_funcTable[VK_PROCESSKEY] = true;
+
+  g_tableBuilt = true;
+}
+
+// ── Modifier helpers ──────────────────────────────────────────────────────
+
+inline bool IsModifierKey(DWORD vk) {
+  return vk == VK_SHIFT   || vk == VK_LSHIFT   || vk == VK_RSHIFT ||
+         vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL ||
+         vk == VK_MENU    || vk == VK_LMENU    || vk == VK_RMENU ||
+         vk == VK_LWIN    || vk == VK_RWIN;
+}
+
+inline bool HasAnyModifier() {
+  return (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 ||
+         (GetAsyncKeyState(VK_MENU)    & 0x8000) != 0 ||
+         (GetAsyncKeyState(VK_SHIFT)   & 0x8000) != 0 ||
+         (GetAsyncKeyState(VK_LWIN)    & 0x8000) != 0 ||
+         (GetAsyncKeyState(VK_RWIN)    & 0x8000) != 0;
+}
+
+// ── Lock key helpers ──────────────────────────────────────────────────────
+
+/// Predict POST-toggle lock-key state.  Since the low-level hook fires
+/// BEFORE the system processes the key, GetKeyState() returns the
+/// PRE-toggle value.  When the key being pressed IS a toggle key, we XOR
+/// the corresponding bit to predict what the state will be after the
+/// system has processed it.
+inline DWORD EncodeLockStates(DWORD vkCode) {
+  DWORD st = 0;
+  if (GetKeyState(VK_CAPITAL) & 1) st |= 1;
+  if (GetKeyState(VK_NUMLOCK) & 1) st |= 2;
+  if (GetKeyState(VK_SCROLL)  & 1) st |= 4;
+  if (GetKeyState(VK_INSERT)  & 1) st |= 8;
+  // Predict toggle
+  if (vkCode == VK_CAPITAL) st ^= 1;
+  if (vkCode == VK_NUMLOCK) st ^= 2;
+  if (vkCode == VK_SCROLL)  st ^= 4;
+  if (vkCode == VK_INSERT)  st ^= 8;
+  return st;
+}
+
+// ── Low-level keyboard hook callback ──────────────────────────────────────
+
+LRESULT CALLBACK KeyboardLLProc(int nCode, WPARAM wParam, LPARAM lParam) {
+  // Must call CallNextHookEx first for system stability, but we can do
+  // early-out checks before the call to keep latency minimal.
+  if (nCode < 0) {
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+  }
+
+  // Only process key-down events (not key-up or system dead-char).
+  if (wParam != WM_KEYDOWN && wParam != WM_SYSKEYDOWN) {
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+  }
+
+  KBDLLHOOKSTRUCT* kb = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+  DWORD vkCode = kb->vkCode;
+
+  // ── Classify: drop or deliver ──────────────────────────────────────────
+
+  // 1. Pure modifier presses → drop (noise).
+  if (IsModifierKey(vkCode)) {
+    // Check all currently-held keys via GetKeyboardState.
+    // If only modifiers are down, this is a pure-modifier press → drop.
+    BYTE keyState[256];
+    if (GetKeyboardState(keyState)) {
+      int nonModDown = 0;
+      for (int i = 0; i < 256; ++i) {
+        if (i == VK_LBUTTON || i == VK_RBUTTON || i == VK_MBUTTON ||
+            i == VK_XBUTTON1 || i == VK_XBUTTON2) continue;
+        if (keyState[i] & 0x80) {  // high bit = key is down
+          if (!IsModifierKey(static_cast<DWORD>(i))) {
+            nonModDown++;
+          }
+        }
+      }
+      if (nonModDown == 0) {
+        // Pure modifier(s) only → drop.
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+      }
+    }
+    // Fall through: modifier is being held alongside a non-modifier key
+    // that was already down — still deliver this key.
+  }
+
+  // 2. Check modifiers for combo detection.
+  bool hasModifiers = HasAnyModifier();
+
+  // 3. Fast-path: non-functional key WITHOUT modifiers → drop.
+  BuildFuncTable();
+  if (vkCode < 256 && !g_funcTable[vkCode] && !hasModifiers) {
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+  }
+
+  // ── Deliver ─────────────────────────────────────────────────────────────
+  DWORD lockBits  = EncodeLockStates(vkCode);
+  DWORD modMask   = EncodeModifiers();
+  DWORD scanCode  = (kb->scanCode & 0xFF);
+
+  // Pack: [lockStates:8][scanCode:8][modifiers:8][reserved:8]
+  LPARAM packed = (lockBits << 24) | (scanCode << 16) | modMask;
+
+  SendMessage(g_hwnd, WM_XMATE_KEY_ECHO,
+              static_cast<WPARAM>(vkCode), packed);
+
+  return CallNextHookEx(nullptr, nCode, wParam, lParam);
+}
+
+}  // namespace
+
+// ── Public API ────────────────────────────────────────────────────────────
+
+bool InstallKeyboardHook(HWND hwnd) {
+  if (g_hook != nullptr) return true;  // already installed
+  g_hwnd = hwnd;
+  BuildFuncTable();
+
+  g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardLLProc,
+                             GetModuleHandle(nullptr), 0);
+  return g_hook != nullptr;
+}
+
+void UninstallKeyboardHook() {
+  if (g_hook != nullptr) {
+    UnhookWindowsHookEx(g_hook);
+    g_hook = nullptr;
+  }
+  g_hwnd = nullptr;
+}
+
+bool IsFunctionalKey(DWORD vkCode) {
+  BuildFuncTable();
+  return g_funcTable[vkCode];
+}
+
+DWORD EncodeModifiers() {
+  DWORD mask = 0;
+  if (GetAsyncKeyState(VK_MENU)    & 0x8000) mask |= 1;
+  if (GetAsyncKeyState(VK_CONTROL) & 0x8000) mask |= 2;
+  if (GetAsyncKeyState(VK_SHIFT)   & 0x8000) mask |= 4;
+  if (GetAsyncKeyState(VK_LWIN)    & 0x8000) mask |= 8;
+  if (GetAsyncKeyState(VK_RWIN)    & 0x8000) mask |= 8;
+  return mask;
+}
