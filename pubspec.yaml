@@ -92,7 +92,6 @@ flutter:
     - assets/quicklook/github.min.css
     - assets/quicklook/marked.min.js
     - assets/dict/lemma.en.txt
-    - assets/donate_qr.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

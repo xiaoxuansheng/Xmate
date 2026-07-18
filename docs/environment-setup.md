@@ -6,9 +6,9 @@
 
 | 工具 | 路径 |
 |------|------|
-| Flutter SDK | `D:\Tool\Flutter\flutter` |
-| Visual Studio 2022 | `D:\Visual Studio` |
-| Git | `D:\Tool\Git` |
+| Flutter SDK | `<Flutter安装路径>` |
+| Visual Studio 2022 | `<Visual Studio安装路径>` |
+| Git | `<Git安装路径>` |
 
 ## 环境要求
 

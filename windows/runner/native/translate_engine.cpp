@@ -588,7 +588,7 @@ static std::string GetModelDir() {
         }
     }
     if (resolved.empty()) {
-        resolved = "e:/AI/XMate/windows/runner/native/models_translate";
+        resolved = "models_translate";
     }
     std::cerr << "[Translate] GetModelDir: " << resolved
               << " (source=" << (fromExe ? "exe_dir" : "fallback") << ")" << std::endl;

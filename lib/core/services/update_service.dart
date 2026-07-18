@@ -16,11 +16,11 @@ import '../settings/settings_service.dart';
 import '../utils/logger.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Configuration — fill in your GitHub username and repo name
+// Configuration — GitHub owner & repo for update checks
 // ═══════════════════════════════════════════════════════════════════════════
 
-const _githubOwner = 'xiaoxuansheng'; // TODO: replace with actual username
-const _githubRepo = 'Xmate';                 // TODO: replace with actual repo name
+const _githubOwner = 'xiaoxuansheng';
+const _githubRepo = 'Xmate';
 
 // ═══════════════════════════════════════════════════════════════════════════
 

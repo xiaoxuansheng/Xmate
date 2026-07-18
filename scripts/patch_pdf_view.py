@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Apply remaining QL PDF viewer changes."""
-import sys
+import sys, os
 
-path = r'e:\AI\XMate\lib\plugins\quicklook\views\quicklook_pdf_view.dart'
+path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+    '..', 'lib', 'plugins', 'quicklook', 'views', 'quicklook_pdf_view.dart')
 with open(path, 'r', encoding='utf-8') as f:
     data = f.read()
 

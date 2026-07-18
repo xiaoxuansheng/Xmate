@@ -5,8 +5,8 @@
 #define AppVersion "3.0.1"
 #define AppPublisher "XMate"
 #define AppExeName "xmate.exe"
-#define SourcePath "e:\AI\XMate\build\windows\x64\runner\Release"
-#define OutputPath "e:\AI\XMate\installer"
+#define SourcePath "..\build\windows\x64\runner\Release"
+#define OutputPath "..\installer"
 
 [Setup]
 AppId={{A8F1C9E2-4D5B-4A3C-9E2F-1B7D8A3C5E9F}

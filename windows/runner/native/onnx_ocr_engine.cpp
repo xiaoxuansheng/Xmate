@@ -1780,7 +1780,7 @@ static std::string GetModelDir() {
             return result;
         }
     }
-    return "e:/AI/XMate/windows/runner/native/models";
+    return "models";
 }
 
 static OnnxOcrEngine& GetEngine() {

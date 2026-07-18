@@ -146,7 +146,7 @@
 ## 启动检查
 
 ```bash
-cd e:\AI\XMate
-D:\Tool\Flutter\flutter\bin\flutter build windows --debug  # 编译
-./build/windows/x64/runner/Debug/xmate.exe                  # 启动
+cd /path/to/XMate
+flutter build windows --debug        # 编译
+./build/windows/x64/runner/Debug/xmate.exe  # 启动
 ```

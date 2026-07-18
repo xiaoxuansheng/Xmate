@@ -1,2 +1,2 @@
 @echo off
-start "" /B "e:\AI\XMate\build\windows\x64\runner\Debug\xmate.exe"
+start "" /B "%~dp0build\windows\x64\runner\Debug\xmate.exe"
