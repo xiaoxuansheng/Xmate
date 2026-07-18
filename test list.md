@@ -1,18 +1,21 @@
 # XMate 测试清单
 
-**当前版本**: V3.3.2 | **日期**: 2026-07-18
+**当前版本**: V3.4.0 | **日期**: 2026-07-18
 
-**V3.3.2** — GitHub 在线更新：设置页版本号旁检测新版本 + Update Available 按钮 + 下载安装包
+**V3.4.0** — GitHub 在线更新正式发布：安全清理 + 相对路径 + 安装包上传 GitHub Release
 - 改动文件：
-  `lib/core/services/update_service.dart`（新增 —— GitHub Releases API 版本检查 + 缓存 + 安装包下载），
-  `lib/ui/settings/settings_page.dart`（_VersionRow 加入更新检查、Update 按钮、下载进度条、确认对话框），
-  `.gitignore`（新增 XMate 排除规则），
-  `README.md`（替换默认模板，加入项目说明和第三方许可），
-  `LICENSE`（新增 MIT 许可证），
-  `pubspec.yaml`（3.3.2）
+  `lib/core/services/update_service.dart`（填入 GitHub owner xiaoxuansheng），
+  `pubspec.yaml`（3.4.0），
+  `scripts/installer_v340.iss`（新 Inno Setup 打包脚本），
+  `build_vs.bat` / `launch_xmate.bat` / `clean_build.ps1` / `scripts/patch_pdf_view.py` / `scripts/installer_v*.iss`（硬编码路径 → 相对路径），
+  `CLAUDE.md`（版本号 + 路径改为通用占位符），
+  `docs/environment-setup.md`（工具路径改为通用占位符），
+  `windows/runner/native/onnx_ocr_engine.cpp` / `translate_engine.cpp`（C++ 回退路径改为相对），
+  `assets/donate_qr.png`（已删除），
+  `.gitignore`（完善排除规则）
 - 核心测试：
-  1. 打开设置页 General → 等待数秒 → 无网络下静默降级不弹错误
-  2. 修改版本号为低版本（如 0.0.1）→ 打开设置页 → 版本号旁出现 "Update" 按钮
-  3. 点击 Update → 弹出确认对话框显示新旧版本号 → 确认后下载进度条 + 百分比显示
-  4. 下载完成后自动启动安装程序（新版本 v3.3.2 需先上传 GitHub Release）
-  5. 已是最新版本时 → 版本号旁无额外按钮（正常显示）
+  1. 编译 `flutter build windows --release` 无错误
+  2. 运行 Inno Setup 编译 `installer_v340.iss` → 生成 `XMate_Setup_v3.4.0.exe`（约 130MB）
+  3. 上传安装包到 GitHub Release `v3.4.0`（tag + asset）
+  4. 设置页 General → 版本号旁显示 "Update" 按钮（本地版本 3.4.0，远端的 Release 标记更新时弹出）
+  5. 点击 Update → 确认弹窗 → 下载进度条 → 启动安装程序

@@ -4,7 +4,7 @@
 
 ## 项目概要
 
-**XMate** = Windows 私人助理工具合集 App。Flutter 框架，插件化架构，命令面板 + 快捷键驱动。当前版本 **V3.2.0**（双引擎 OCR：PP-OCRv6 中文 + WinRT 英文）。
+**XMate** = Windows 私人助理工具合集 App。Flutter 框架，插件化架构，命令面板 + 快捷键驱动。当前版本 **V3.4.0**（双引擎 OCR：PP-OCRv6 中文 + WinRT 英文，GitHub 在线更新）。
 
 ## 环境说明
 
