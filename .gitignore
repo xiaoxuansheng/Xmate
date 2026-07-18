@@ -49,3 +49,5 @@ app.*.map.json
 /lib_bak_*/
 /tools/
 /windows/runner/native/third_party/
+windows/runner/native/models/translate (abandoned)/translate_decoder.onnx
+windows/runner/native/models/translate (abandoned)/translate_encoder.onnx
