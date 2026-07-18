@@ -3,6 +3,8 @@
 *.log
 *.pyc
 *.swp
+*.tmp
+*.temp
 .DS_Store
 .atom/
 .build/
@@ -12,22 +14,27 @@
 .swiftpm/
 migrate_working_dir/
 
+# Windows system
+desktop.ini
+Thumbs.db
+
 # IntelliJ related
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VSCode — keep commented unless you want to share workspace config
 #.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.metadata
+.packages
 .pub-cache/
 .pub/
 /build/
@@ -44,10 +51,45 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Python cache
+__pycache__/
+*.pyc
+
 # ─── XMate specific ───
+
+# Built installers & bundled data
 /installer/
+
+# Lib backups (created before each modification)
 /lib_bak_*/
+
+# External tools (ffmpeg, 7z, etc.)
 /tools/
+
+# Vendored third-party source
 /windows/runner/native/third_party/
-windows/runner/native/models/translate (abandoned)/translate_decoder.onnx
-windows/runner/native/models/translate (abandoned)/translate_encoder.onnx
+
+# Abandoned / stale model files
+windows/runner/native/models_translate (abandoned)/
+
+# Dev journal — reference only, not needed for build
+/devlog/
+
+# Claude Code internal tracking — CLAUDE.md at root stays
+/.claude/
+
+# Backup files (should never be committed)
+*.bak
+
+# Third-party binaries in native runner (copied from /tools during build)
+windows/runner/native/7za.exe
+
+# C++ build artifacts
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.iobj
+*.ipdb
